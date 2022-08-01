@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <cstring>
 #include <assert.h>
+#include <csignal>
 
 #define VIDEO_DEVICE "/dev/video0"
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
@@ -19,19 +20,29 @@
 #define BYTES_PER_PIXEL 1.5f
 
 using namespace cv;
+using namespace libfreenect2;
+
+bool running = true;
+
+void handler(int s) {
+    running = false;
+}
 
 int main() {
-    libfreenect2::Freenect2 freenect2;
-    libfreenect2::Freenect2Device *dev = 0;
-    libfreenect2::PacketPipeline *pipeline = 0;
+    signal(SIGINT, handler);
+    signal(SIGTERM, handler);
+
+    Freenect2 freenect2;
+    Freenect2Device *dev = 0;
+    PacketPipeline *pipeline = 0;
 
     assert(freenect2.enumerateDevices() != 0);
 
-    pipeline = new libfreenect2::OpenGLPacketPipeline();
+    pipeline = new OpenGLPacketPipeline();
     dev = freenect2.openDevice(freenect2.getDefaultDeviceSerialNumber(), pipeline);
 
-    libfreenect2::SyncMultiFrameListener listener(libfreenect2::Frame::Color);
-    libfreenect2::FrameMap frames;
+    SyncMultiFrameListener listener(Frame::Color);
+    FrameMap frames;
 
     dev->setColorFrameListener(&listener);
     dev->start();
@@ -65,10 +76,10 @@ int main() {
 
     unsigned char* dest = (unsigned char*)malloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
 
-    while(true) {
+    while(running) {
         listener.waitForNewFrame(frames);
         
-        libfreenect2::Frame *rgb = frames[libfreenect2::Frame::Color];
+        Frame *rgb = frames[Frame::Color];
 
         Mat mrgb(VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC4, rgb->data);
         Mat myuv(BYTES_PER_PIXEL * VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC1, dest);
