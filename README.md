@@ -1,6 +1,6 @@
 # Freenect2cam
 
-Linux Kinect V2 driver, using Freenect2 and OpenCV.
+Linux Kinect V2 driver, using Freenect2, V4l2loopback and OpenCV.
 
 ## Build
 
