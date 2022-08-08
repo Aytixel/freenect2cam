@@ -22,6 +22,17 @@ sudo modprobe v4l2loopback video_nr=0 card_label="Kinect V2 Color" exclusive_cap
 sudo modprobe -r v4l2loopback
 ```
 
+## Install in systemd
+
+```
+sudo ln -s $HOME/Documents/GitHub/freenect2cam/systemd/freenect2cam.service /etc/systemd/system
+sudo ln -s $HOME/Documents/GitHub/freenect2cam/build/freenect2cam /usr/bin/
+
+sudo systemctl daemon-reload
+sudo systemctl enable example.service
+sudo systemctl start example.service
+```
+
 ## Utility command
 
 ```
