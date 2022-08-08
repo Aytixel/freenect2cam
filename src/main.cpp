@@ -1,5 +1,6 @@
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
+#include <libfreenect2/packet_pipeline.h>
 #include <libfreenect2/logger.h>
 
 #include <opencv2/opencv.hpp>
@@ -171,6 +172,7 @@ int main(int argc, char *argv[]) {
     // open the kinect
     Freenect2 freenect2;
     Freenect2Device *dev;
+    PacketPipeline *pipeline;
 
     // disable the freenect logger
     setGlobalLogger(NULL);
@@ -186,7 +188,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    dev = freenect2.openDevice(freenect2.getDefaultDeviceSerialNumber());
+    pipeline = new CudaPacketPipeline();
+    dev = freenect2.openDevice(freenect2.getDefaultDeviceSerialNumber(), pipeline);
 
     CustomFrameListener listener;
 

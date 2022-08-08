@@ -24,6 +24,8 @@ sudo modprobe -r v4l2loopback
 
 ## Install in systemd
 
+If you use the OpenGLPacketPipeline from libfreenect2, you will need more configuration, because it needs X11 display server to work
+
 ```
 sudo ln -s $HOME/Documents/GitHub/freenect2cam/systemd/freenect2cam.service /etc/systemd/system
 sudo ln -s $HOME/Documents/GitHub/freenect2cam/build/freenect2cam /usr/bin/
