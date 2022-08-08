@@ -12,6 +12,7 @@
 #include <csignal>
 #include <dirent.h>
 #include <string>
+#include <stdio.h>
 
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
 #define VIDEO_WIDTH 1920
@@ -24,7 +25,6 @@ using namespace libfreenect2;
 
 char *video_device_path;
 unsigned char *dest;
-int pid = getpid();
 int fd = -1;
 bool running = true;
 
@@ -46,18 +46,21 @@ class CustomFrameListener: public FrameListener {
     }
 };
 
-bool is_all_digits(char str[256]) {
-    for (ushort i = 0; i < 256 && str[i]; i++) {
-        if ((str[i] < '0' || str[i] > '9')) {
-            return false;
-        }
-    }
+char* itoa(int value){
+    char *buf = new char;
 
-    return true;
+    sprintf(buf,"%d",value);
+	
+    return buf;
+}
+
+void processdir(const struct dirent *dir) {
+     puts(dir->d_name);
 }
 
 bool is_video_device_used() {
     // list all process except the current
+    static char *pid = itoa(getpid());
     string proc_path("/proc/");
     DIR *proc_dir = opendir(proc_path.c_str());
 
@@ -65,24 +68,21 @@ bool is_video_device_used() {
         struct dirent *proc_dir_ent;
 
         while ((proc_dir_ent = readdir(proc_dir)) != NULL) {
-            if (is_all_digits(proc_dir_ent->d_name) && proc_dir_ent->d_type == DT_DIR) {
-                int process_pid = atoi(proc_dir_ent->d_name);
-
-                if (pid != process_pid) {
+            if (proc_dir_ent->d_type == DT_DIR && strcmp(pid, proc_dir_ent->d_name)) {
                     // list all process handle
-                    string process_path = string("/proc/") + string(proc_dir_ent->d_name) + string("/fd/");
+                    string process_path = string("/proc/") + proc_dir_ent->d_name + "/fd/";
                     DIR *process_dir = opendir(process_path.c_str());
 
                     if (process_dir != NULL) {
                         struct dirent *process_dir_ent;
-                        char process_handle_path[PATH_MAX];
 
                         while ((process_dir_ent = readdir(process_dir)) != NULL) {
                             // find if it has handle to the video device
                             if (process_dir_ent->d_type == DT_LNK) {
-                                realpath((process_path + string(process_dir_ent->d_name)).c_str(), process_handle_path);
+                                char *process_handle_path = realpath((process_path + process_dir_ent->d_name).c_str(), NULL);
 
                                 if (process_handle_path != NULL && strcmp(process_handle_path, video_device_path) == 0) {
+                                    free(process_handle_path);
                                     closedir(process_dir);
                                     closedir(proc_dir);
 
@@ -92,7 +92,6 @@ bool is_video_device_used() {
                         }
 
                         closedir(process_dir);
-                    }
                 }
             }
         }
