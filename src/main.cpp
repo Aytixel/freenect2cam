@@ -98,7 +98,7 @@ bool is_video_device_used() {
 
         closedir(proc_dir);
     } else {
-        std::cerr << "Can't open /proc directory!" << std::endl;
+        cerr << "Can't open /proc directory!" << endl;
     }
 
     return false;
@@ -107,6 +107,7 @@ bool is_video_device_used() {
 int main(int argc, char *argv[]) {
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
+
 
     if (argc < 2) {
         cerr << "Not enougth argument! You should enter at least the path to the virtual video device to use. Other argument will be ignored." << endl;
@@ -157,14 +158,20 @@ int main(int argc, char *argv[]) {
 
     // open the kinect
     Freenect2 freenect2;
-    Freenect2Device *dev = 0;
+    Freenect2Device *dev;
 
     // disable the freenect logger
     setGlobalLogger(NULL);
 
-    if (freenect2.enumerateDevices() == 0) {
-        std::cerr << "Kinect not connected!" << std::endl;
-        return -1;
+    while (freenect2.enumerateDevices() == 0) {
+        usleep(1000 * 100);
+
+        if (!running) {
+            close(fd);
+            free(dest);
+
+            return 0;
+        }
     }
 
     dev = freenect2.openDevice(freenect2.getDefaultDeviceSerialNumber());
@@ -183,13 +190,13 @@ int main(int argc, char *argv[]) {
 
         if (video_device_used != video_device_in_use) {
             if (video_device_in_use) {
-                cerr << "Kinect starting." << endl;
+                cout << "Kinect starting." << endl;
 
                 dev->startStreams(true, false);
             } else {
                 dev->stop();
                 
-                cerr << "Kinect shutdown." << endl;
+                cout << "Kinect shutdown." << endl;
             }
 
             video_device_used = video_device_in_use;
