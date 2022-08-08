@@ -9,19 +9,22 @@
 #include <unistd.h>
 
 #include <fcntl.h>
-#include <stdio.h>
 #include <csignal>
+#include <dirent.h>
+#include <string>
 
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
 #define VIDEO_WIDTH 1920
 #define VIDEO_HEIGHT 1080
 #define BYTES_PER_PIXEL 1.5f
 
+using namespace std;
 using namespace cv;
 using namespace libfreenect2;
 
-char *video_device;
+char *video_device_path;
 unsigned char *dest;
+int pid = getpid();
 int fd = -1;
 bool running = true;
 
@@ -43,23 +46,82 @@ class CustomFrameListener: public FrameListener {
     }
 };
 
+bool is_all_digits(char str[256]) {
+    for (ushort i = 0; i < 256 && str[i]; i++) {
+        if ((str[i] < '0' || str[i] > '9')) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool is_video_device_used() {
+    // list all process except the current
+    string proc_path("/proc/");
+    DIR *proc_dir = opendir(proc_path.c_str());
+
+    if (proc_dir != NULL) {
+        struct dirent *proc_dir_ent;
+
+        while ((proc_dir_ent = readdir(proc_dir)) != NULL) {
+            if (is_all_digits(proc_dir_ent->d_name) && proc_dir_ent->d_type == DT_DIR) {
+                int process_pid = atoi(proc_dir_ent->d_name);
+
+                if (pid != process_pid) {
+                    // list all process handle
+                    string process_path = string("/proc/") + string(proc_dir_ent->d_name) + string("/fd/");
+                    DIR *process_dir = opendir(process_path.c_str());
+
+                    if (process_dir != NULL) {
+                        struct dirent *process_dir_ent;
+                        char process_handle_path[PATH_MAX];
+
+                        while ((process_dir_ent = readdir(process_dir)) != NULL) {
+                            // find if it has handle to the video device
+                            if (process_dir_ent->d_type == DT_LNK) {
+                                realpath((process_path + string(process_dir_ent->d_name)).c_str(), process_handle_path);
+
+                                if (process_handle_path != NULL && strcmp(process_handle_path, video_device_path) == 0) {
+                                    closedir(process_dir);
+                                    closedir(proc_dir);
+
+                                    return true;
+                                }
+                            }
+                        }
+
+                        closedir(process_dir);
+                    }
+                }
+            }
+        }
+
+        closedir(proc_dir);
+    } else {
+        std::cerr << "Can't open /proc directory!" << std::endl;
+    }
+
+    return false;
+}
+
 int main(int argc, char *argv[]) {
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
 
     if (argc < 2) {
-        std::cerr << "Not enougth argument! You should enter at least the path to the virtual video device to use. Other argument will be ignored." << std::endl;
+        cerr << "Not enougth argument! You should enter at least the path to the virtual video device to use. Other argument will be ignored." << endl;
         return -1;
     }
 
-    video_device = *(argv + 1);
-    dest = (unsigned char*)malloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+    video_device_path = *(argv + 1);
+    dest = (unsigned char*)calloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT, sizeof(unsigned char));
 
     // open the virtual video device and configure it
-    fd = open(video_device, O_RDWR);
+    fd = open(video_device_path, O_RDWR);
 
     if (fd < 0) {
-        std::cerr << "Can't open virtual video device!" << std::endl;
+        cerr << "Can't open virtual video device!" << endl;
         return -1;
     }
 
@@ -77,7 +139,7 @@ int main(int argc, char *argv[]) {
 	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
 	if (ioctl(fd, VIDIOC_S_FMT, &vid_format) == -1) {
-        std::cerr << "Can't set virtual video device format!" << std::endl;
+        cerr << "Can't set virtual video device format!" << endl;
         return -1;
     }
 
@@ -90,7 +152,7 @@ int main(int argc, char *argv[]) {
     vid_parm.parm.capture.timeperframe.denominator = 30;
 
     if (ioctl(fd, VIDIOC_S_PARM, &vid_parm) == -1) {
-        std::cerr << "Can't set virtual video device frame rate!" << std::endl;
+        cerr << "Can't set virtual video device frame rate!" << endl;
         return -1;
     }
 
@@ -111,17 +173,37 @@ int main(int argc, char *argv[]) {
     CustomFrameListener listener;
 
     dev->setColorFrameListener(&listener);
-    dev->startStreams(true, false);
 
-    while(running) {
+    bool video_device_used = false;
+
+    while(true) {
         sleep(1);
+        write(fd, dest, BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+
+        bool video_device_in_use = is_video_device_used();
+
+        if (video_device_used != video_device_in_use) {
+            if (video_device_in_use) {
+                cerr << "Kinect starting." << endl;
+
+                dev->startStreams(true, false);
+            } else {
+                dev->stop();
+                
+                cerr << "Kinect shutdown." << endl;
+            }
+
+            video_device_used = video_device_in_use;
+        }
+
+        if (!running) {
+            dev->stop();
+            dev->close();
+
+            close(fd);
+            free(dest);
+
+            return 0;
+        }
     }
-
-    dev->stop();
-    dev->close();
-    
-    close(fd);
-    free(dest);
-
-    return 0;
 }
