@@ -29,8 +29,8 @@ sudo ln -s $HOME/Documents/GitHub/freenect2cam/systemd/freenect2cam.service /etc
 sudo ln -s $HOME/Documents/GitHub/freenect2cam/build/freenect2cam /usr/bin/
 
 sudo systemctl daemon-reload
-sudo systemctl enable example.service
-sudo systemctl start example.service
+sudo systemctl enable freenect2cam.service
+sudo systemctl start freenect2cam.service
 ```
 
 ## Utility command
