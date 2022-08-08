@@ -38,13 +38,23 @@ class CustomFrameListener: public FrameListener {
             Mat mrgb(VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC4, frame->data);
             Mat myuv(BYTES_PER_PIXEL * VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC1, dest);
 
-            cvtColor(mrgb, myuv, COLOR_BGR2YUV_I420);
+            cvtColor(mrgb, myuv, COLOR_BGRA2YUV_I420);
             write(fd, dest, BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
         }
 
         return false;
     }
 };
+
+void create_black_image(unsigned char* image) {
+    unsigned char *temp_black_image = (unsigned char*)calloc(3 * VIDEO_HEIGHT * VIDEO_WIDTH, 1);
+
+    Mat mrgb(VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC3, temp_black_image);
+    Mat myuv(BYTES_PER_PIXEL * VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC1, image);
+
+    cvtColor(mrgb, myuv, COLOR_RGB2YUV_I420);
+    free(temp_black_image);
+}
 
 char* itoa(int value){
     char *buf = new char;
@@ -115,7 +125,9 @@ int main(int argc, char *argv[]) {
     }
 
     video_device_path = *(argv + 1);
-    dest = (unsigned char*)calloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT, sizeof(unsigned char));
+    dest = (unsigned char*)malloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+
+    create_black_image(dest);
 
     // open the virtual video device and configure it
     fd = open(video_device_path, O_RDWR);
@@ -195,7 +207,9 @@ int main(int argc, char *argv[]) {
                 dev->startStreams(true, false);
             } else {
                 dev->stop();
-                
+
+                create_black_image(dest);
+
                 cout << "Kinect shutdown." << endl;
             }
 
