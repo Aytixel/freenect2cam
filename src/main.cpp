@@ -1,5 +1,6 @@
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
+#include <libfreenect2/registration.h>
 #include <libfreenect2/packet_pipeline.h>
 #include <libfreenect2/logger.h>
 
@@ -12,46 +13,85 @@
 #include <fcntl.h>
 #include <csignal>
 #include <dirent.h>
-#include <string>
-#include <stdio.h>
 
-#define FRAME_FORMAT V4L2_PIX_FMT_YUV420
-#define VIDEO_WIDTH 1920
-#define VIDEO_HEIGHT 1080
-#define BYTES_PER_PIXEL 1.5f
+#include <video_device.hpp>
+
+#define VIDEO_FRAME_RATE 30
+
+#define COLOR_FRAME_FORMAT V4L2_PIX_FMT_YUV420
+#define COLOR_VIDEO_WIDTH 1920
+#define COLOR_VIDEO_HEIGHT 1080
+#define COLOR_BYTES_PER_PIXEL 1.5f
+
+#define IR_DEPTH_FRAME_FORMAT V4L2_PIX_FMT_Y16
+#define IR_DEPTH_VIDEO_WIDTH 512
+#define IR_DEPTH_VIDEO_HEIGHT 424
+#define IR_DEPTH_BYTES_PER_PIXEL 2
 
 using namespace std;
 using namespace cv;
 using namespace libfreenect2;
 
-char *video_device_path;
-unsigned char *dest;
-int fd = -1;
+char **video_device_paths;
+u_char **image_buffers;
+
+VideoDevice *video_devices;
+
 bool running = true;
+
+Registration *registration;
 
 void handler(int s) {
     running = false;
 }
 
+void float_to_y16(u_char *input_image_buffer, u_char *output_image_buffer, uint width, uint height) {
+    uint float_image_size = 4 * width * height;
+    float f;
+    ushort us;
+
+    for (uint i = 0, j = 0; i < float_image_size; i += 4, j += 2) {
+        memcpy(&f, input_image_buffer + i, sizeof(f));
+
+        us = f;
+
+        output_image_buffer[j] = us & 0xFF00;
+        output_image_buffer[j + 1] = us & 0x00FF;
+    }
+}
+
 class CustomFrameListener: public FrameListener {
     bool onNewFrame(Frame::Type type, Frame *frame) {
-        if (type == Frame::Type::Color) {
-            Mat mrgb(VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC4, frame->data);
-            Mat myuv(BYTES_PER_PIXEL * VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC1, dest);
+        Mat mrgb(COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC4, frame->data);
+        Mat myuv(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC1, image_buffers[0]);
 
-            cvtColor(mrgb, myuv, COLOR_BGRA2YUV_I420);
-            write(fd, dest, BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+        switch (type) {
+            case Frame::Color:
+                cvtColor(mrgb, myuv, COLOR_BGRA2YUV_I420);
+
+                video_devices[0].feed_image(image_buffers[0]);
+                break;
+            case Frame::Ir:
+                float_to_y16(frame->data, image_buffers[1], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT);
+
+                video_devices[1].feed_image(image_buffers[1]);
+                break;
+            case Frame::Depth:
+                float_to_y16(frame->data, image_buffers[2], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT);
+
+                video_devices[2].feed_image(image_buffers[2]);
+                break;
         }
 
         return false;
     }
 };
 
-void create_black_image(unsigned char* image) {
-    unsigned char *temp_black_image = (unsigned char*)calloc(3 * VIDEO_HEIGHT * VIDEO_WIDTH, 1);
+void create_black_image(u_char* image) {
+    u_char *temp_black_image = (u_char*)calloc(3 * COLOR_VIDEO_HEIGHT * COLOR_VIDEO_WIDTH, 1);
 
-    Mat mrgb(VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC3, temp_black_image);
-    Mat myuv(BYTES_PER_PIXEL * VIDEO_HEIGHT, VIDEO_WIDTH, CV_8UC1, image);
+    Mat mrgb(COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC3, temp_black_image);
+    Mat myuv(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC1, image);
 
     cvtColor(mrgb, myuv, COLOR_RGB2YUV_I420);
     free(temp_black_image);
@@ -92,7 +132,14 @@ bool is_video_device_used() {
                             if (process_dir_ent->d_type == DT_LNK) {
                                 char *process_handle_path = realpath((process_path + process_dir_ent->d_name).c_str(), NULL);
 
-                                if (process_handle_path != NULL && strcmp(process_handle_path, video_device_path) == 0) {
+                                if (
+                                    process_handle_path != NULL &&
+                                    (
+                                        strcmp(process_handle_path, video_device_paths[0]) == 0 ||
+                                        strcmp(process_handle_path, video_device_paths[1]) == 0 ||
+                                        strcmp(process_handle_path, video_device_paths[2]) == 0
+                                    )
+                                ) {
                                     free(process_handle_path);
                                     closedir(process_dir);
                                     closedir(proc_dir);
@@ -119,55 +166,30 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
 
-
-    if (argc < 2) {
-        cerr << "Not enougth argument! You should enter at least the path to the virtual video device to use. Other argument will be ignored." << endl;
+    if (argc < 4) {
+        cerr << "Not enougth argument! You should enter at least the path to the 3 virtual video device to use. Other argument will be ignored." << endl;
         return -1;
     }
 
-    video_device_path = *(argv + 1);
-    dest = (unsigned char*)malloc(BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+    video_device_paths = (char**)malloc(3 * sizeof(char*));
 
-    create_black_image(dest);
+    video_device_paths[0] = *(argv + 1);
+    video_device_paths[1] = *(argv + 2);
+    video_device_paths[2] = *(argv + 3);
 
-    // open the virtual video device and configure it
-    fd = open(video_device_path, O_RDWR);
+    image_buffers = (u_char**)malloc(3 * sizeof(u_char*));
 
-    if (fd < 0) {
-        cerr << "Can't open virtual video device!" << endl;
-        return -1;
-    }
+    image_buffers[0] = (u_char*)malloc(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_WIDTH * COLOR_VIDEO_HEIGHT);
+    image_buffers[1] = (u_char*)malloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT);
+    image_buffers[2] = (u_char*)malloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT);
 
-	struct v4l2_format vid_format;
+    create_black_image(image_buffers[0]);
 
-	memset(&vid_format, 0, sizeof(vid_format));
+    video_devices = (VideoDevice*)malloc(3 * sizeof(VideoDevice));
 
-	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	vid_format.fmt.pix.width = VIDEO_WIDTH;
-	vid_format.fmt.pix.height = VIDEO_HEIGHT;
-	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
-	vid_format.fmt.pix.sizeimage = BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT;
-	vid_format.fmt.pix.field = V4L2_FIELD_NONE;
-	vid_format.fmt.pix.bytesperline = BYTES_PER_PIXEL * VIDEO_WIDTH;
-	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-
-	if (ioctl(fd, VIDIOC_S_FMT, &vid_format) == -1) {
-        cerr << "Can't set virtual video device format!" << endl;
-        return -1;
-    }
-
-    struct v4l2_streamparm vid_parm;
-
-	memset(&vid_parm, 0, sizeof(vid_parm));
-
-    vid_parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    vid_parm.parm.capture.timeperframe.numerator = 1;
-    vid_parm.parm.capture.timeperframe.denominator = 30;
-
-    if (ioctl(fd, VIDIOC_S_PARM, &vid_parm) == -1) {
-        cerr << "Can't set virtual video device frame rate!" << endl;
-        return -1;
-    }
+    video_devices[0] = VideoDevice(video_device_paths[0], COLOR_VIDEO_WIDTH, COLOR_VIDEO_HEIGHT, COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_WIDTH, COLOR_FRAME_FORMAT, VIDEO_FRAME_RATE);
+    video_devices[1] = VideoDevice(video_device_paths[1], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT, IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_FRAME_FORMAT, VIDEO_FRAME_RATE);
+    video_devices[2] = VideoDevice(video_device_paths[2], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT, IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_FRAME_FORMAT, VIDEO_FRAME_RATE);
 
     // open the kinect
     Freenect2 freenect2;
@@ -181,8 +203,18 @@ int main(int argc, char *argv[]) {
         usleep(1000 * 100);
 
         if (!running) {
-            close(fd);
-            free(dest);
+            video_devices[0].close();
+            video_devices[1].close();
+            video_devices[2].close();
+
+            free(video_device_paths);
+            free(image_buffers[0]);
+            free(image_buffers[1]);
+            free(image_buffers[2]);
+            free(image_buffers);
+            free(video_devices);
+
+            cout << "Kinect close." << endl;
 
             return 0;
         }
@@ -194,12 +226,14 @@ int main(int argc, char *argv[]) {
     CustomFrameListener listener;
 
     dev->setColorFrameListener(&listener);
+    dev->setIrAndDepthFrameListener(&listener);
 
     bool video_device_used = false;
 
     while(true) {
         sleep(1);
-        write(fd, dest, BYTES_PER_PIXEL * VIDEO_WIDTH * VIDEO_HEIGHT);
+            
+        video_devices[0].feed_image(image_buffers[0]);
 
         bool video_device_in_use = is_video_device_used();
 
@@ -207,11 +241,14 @@ int main(int argc, char *argv[]) {
             if (video_device_in_use) {
                 cout << "Kinect starting." << endl;
 
-                dev->startStreams(true, false);
+                dev->start();
+                registration = new libfreenect2::Registration(dev->getIrCameraParams(), dev->getColorCameraParams());
+
+                Frame undistorted(512, 424, 4), registered(512, 424, 4);
             } else {
                 dev->stop();
 
-                create_black_image(dest);
+                create_black_image(image_buffers[0]);
 
                 cout << "Kinect shutdown." << endl;
             }
@@ -222,9 +259,18 @@ int main(int argc, char *argv[]) {
         if (!running) {
             dev->stop();
             dev->close();
+            video_devices[0].close();
+            video_devices[1].close();
+            video_devices[2].close();
 
-            close(fd);
-            free(dest);
+            free(video_device_paths);
+            free(image_buffers[0]);
+            free(image_buffers[1]);
+            free(image_buffers[2]);
+            free(image_buffers);
+            free(video_devices);
+
+            cout << "Kinect close." << endl;
 
             return 0;
         }

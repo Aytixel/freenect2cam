@@ -4,19 +4,19 @@ class VideoDevice {
     private:
         bool open;
         int fd;
-        unsigned int image_size;
+        uint image_size;
 
     public:
-        unsigned int width;
-        unsigned int height;
-        unsigned int bytes_per_line;
-        unsigned int pixel_format;
-        unsigned int frame_rate;
+        uint width;
+        uint height;
+        uint bytes_per_line;
+        uint pixel_format;
+        uint frame_rate;
         char *video_device_path;
 
-        VideoDevice(char *video_device_path, unsigned int width, unsigned int height, unsigned int bytes_per_line, unsigned int pixel_format, unsigned int frame_rate);
+        VideoDevice(char *video_device_path, uint width, uint height, uint bytes_per_line, uint pixel_format, uint frame_rate);
 
-        ssize_t feed_image(unsigned char *image_buffer);
+        ssize_t feed_image(u_char *image_buffer);
 
         void close();
 };

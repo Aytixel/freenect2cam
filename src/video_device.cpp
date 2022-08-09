@@ -10,7 +10,7 @@
 
 using namespace std;
 
-VideoDevice::VideoDevice(char *__video_device_path, unsigned int __width, unsigned int __height, unsigned int __bytes_per_line, unsigned int __pixel_format, unsigned int __frame_rate) {
+VideoDevice::VideoDevice(char *__video_device_path, uint __width, uint __height, uint __bytes_per_line, uint __pixel_format, uint __frame_rate) {
     open = true;
     image_size = __bytes_per_line * __height;
 
@@ -61,7 +61,7 @@ VideoDevice::VideoDevice(char *__video_device_path, unsigned int __width, unsign
     }
 }
 
-ssize_t VideoDevice::feed_image(unsigned char *image_buffer) {
+ssize_t VideoDevice::feed_image(u_char *image_buffer) {
     return open ? write(fd, image_buffer, image_size) : 0;
 }
 

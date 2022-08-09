@@ -13,6 +13,8 @@ INCLUDE_DIRECTORIES(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-add_executable(freenect2cam ./src/main.cpp)
+add_executable(freenect2cam ./src/main.cpp
+                            ./src/video_device.cpp)
 
-target_link_libraries(freenect2cam ${freenect2_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(freenect2cam PRIVATE ${freenect2_LIBRARIES} ${OpenCV_LIBS})
+target_include_directories(freenect2cam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
