@@ -1,20 +1,17 @@
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
-#include <libfreenect2/registration.h>
 #include <libfreenect2/packet_pipeline.h>
 #include <libfreenect2/logger.h>
 
-#include <opencv2/opencv.hpp>
-
 #include <linux/videodev2.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
 
-#include <fcntl.h>
 #include <csignal>
 #include <dirent.h>
+#include <iostream>
+#include <cstring>
 
 #include <video_device.hpp>
+#include <video_tool.hpp>
 
 #define VIDEO_FRAME_RATE 30
 
@@ -29,7 +26,6 @@
 #define IR_DEPTH_BYTES_PER_PIXEL 2
 
 using namespace std;
-using namespace cv;
 using namespace libfreenect2;
 
 char **video_device_paths;
@@ -39,35 +35,15 @@ VideoDevice *video_devices;
 
 bool running = true;
 
-Registration *registration;
-
 void handler(int s) {
     running = false;
 }
 
-void float_to_y16(u_char *input_image_buffer, u_char *output_image_buffer, uint width, uint height) {
-    uint float_image_size = 4 * width * height;
-    float f;
-    ushort us;
-
-    for (uint i = 0, j = 0; i < float_image_size; i += 4, j += 2) {
-        memcpy(&f, input_image_buffer + i, sizeof(f));
-
-        us = f;
-
-        output_image_buffer[j] = us & 0xFF00;
-        output_image_buffer[j + 1] = us & 0x00FF;
-    }
-}
-
 class CustomFrameListener: public FrameListener {
     bool onNewFrame(Frame::Type type, Frame *frame) {
-        Mat mrgb(COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC4, frame->data);
-        Mat myuv(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC1, image_buffers[0]);
-
         switch (type) {
             case Frame::Color:
-                cvtColor(mrgb, myuv, COLOR_BGRA2YUV_I420);
+                bgra_to_yuv420(frame->data, image_buffers[0], COLOR_VIDEO_WIDTH, COLOR_VIDEO_HEIGHT);
 
                 video_devices[0].feed_image(image_buffers[0]);
                 break;
@@ -86,16 +62,6 @@ class CustomFrameListener: public FrameListener {
         return false;
     }
 };
-
-void create_black_image(u_char* image) {
-    u_char *temp_black_image = (u_char*)calloc(3 * COLOR_VIDEO_HEIGHT * COLOR_VIDEO_WIDTH, 1);
-
-    Mat mrgb(COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC3, temp_black_image);
-    Mat myuv(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_HEIGHT, COLOR_VIDEO_WIDTH, CV_8UC1, image);
-
-    cvtColor(mrgb, myuv, COLOR_RGB2YUV_I420);
-    free(temp_black_image);
-}
 
 char* itoa(int value){
     char *buf = new char;
@@ -180,10 +146,10 @@ int main(int argc, char *argv[]) {
     image_buffers = (u_char**)malloc(3 * sizeof(u_char*));
 
     image_buffers[0] = (u_char*)malloc(COLOR_BYTES_PER_PIXEL * COLOR_VIDEO_WIDTH * COLOR_VIDEO_HEIGHT);
-    image_buffers[1] = (u_char*)malloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT);
-    image_buffers[2] = (u_char*)malloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT);
+    image_buffers[1] = (u_char*)calloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT, sizeof(u_char));
+    image_buffers[2] = (u_char*)calloc(IR_DEPTH_BYTES_PER_PIXEL * IR_DEPTH_VIDEO_WIDTH * IR_DEPTH_VIDEO_HEIGHT, sizeof(u_char));
 
-    create_black_image(image_buffers[0]);
+    yuv420_black_image(image_buffers[0], COLOR_VIDEO_WIDTH, COLOR_VIDEO_HEIGHT);
 
     video_devices = (VideoDevice*)malloc(3 * sizeof(VideoDevice));
 
@@ -234,6 +200,8 @@ int main(int argc, char *argv[]) {
         sleep(1);
             
         video_devices[0].feed_image(image_buffers[0]);
+        video_devices[1].feed_image(image_buffers[1]);
+        video_devices[2].feed_image(image_buffers[2]);
 
         bool video_device_in_use = is_video_device_used();
 
@@ -242,13 +210,12 @@ int main(int argc, char *argv[]) {
                 cout << "Kinect starting." << endl;
 
                 dev->start();
-                registration = new libfreenect2::Registration(dev->getIrCameraParams(), dev->getColorCameraParams());
-
-                Frame undistorted(512, 424, 4), registered(512, 424, 4);
             } else {
                 dev->stop();
 
-                create_black_image(image_buffers[0]);
+                yuv420_black_image(image_buffers[0], COLOR_VIDEO_WIDTH, COLOR_VIDEO_HEIGHT);
+                grayscale_black_image(image_buffers[1], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT);
+                grayscale_black_image(image_buffers[2], IR_DEPTH_VIDEO_WIDTH, IR_DEPTH_VIDEO_HEIGHT);
 
                 cout << "Kinect shutdown." << endl;
             }
