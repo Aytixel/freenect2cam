@@ -2,7 +2,7 @@
 Description=Freenect2cam
 
 [Service]
-ExecStart=/usr/bin/freenect2cam /dev/video0
+ExecStart=/usr/bin/freenect2cam /dev/video0 /dev/video1 /dev/video2
 
 [Install]
 WantedBy=multi-user.target

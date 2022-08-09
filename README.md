@@ -15,9 +15,9 @@ cmake -Dfreenect2_DIR=$HOME/freenect2/lib/cmake/freenect2 .. && make
 ## Run it
 
 ```
-sudo modprobe v4l2loopback video_nr=0 card_label="Kinect V2 Color" exclusive_caps=1
+sudo modprobe v4l2loopback video_nr=0,1,2 card_label="Kinect V2 Color,Kinect V2 IR,Kinect V2 Depth" exclusive_caps=1,1,1
 
-./build/freenect2cam /dev/video0
+./build/freenect2cam /dev/video0 /dev/video1 /dev/video2
 
 sudo modprobe -r v4l2loopback
 ```
