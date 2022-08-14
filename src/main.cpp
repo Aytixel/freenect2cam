@@ -112,6 +112,8 @@ bool is_video_device_used() {
 
                                     return true;
                                 }
+
+                                free(process_handle_path);
                             }
                         }
 
