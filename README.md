@@ -7,6 +7,8 @@ Linux Kinect V2 driver, using **Freenect2, V4l2loopback** and **OpenCV.**
 You have to have **download, build** and **install, libfreenect2, opencv, libv4l-dev** and **v4l2loopback** before!
 We also recommend **installing v4l-utils.**
 
+**⚠️ Do not forget to set up udev rules, for device access on linux, after installing libfreenect2.**
+
 ```
 mkdir build && cd build
 cmake -Dfreenect2_DIR=$HOME/freenect2/lib/cmake/freenect2 .. && make

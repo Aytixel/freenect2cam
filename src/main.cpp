@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    pipeline = new OpenGLPacketPipeline();
+    pipeline = new CudaPacketPipeline();
     dev = freenect2.openDevice(freenect2.getDefaultDeviceSerialNumber(), pipeline);
 
     CustomFrameListener listener;
