@@ -24,13 +24,15 @@ sudo modprobe v4l2loopback video_nr=0,1,2 card_label="Kinect V2 Color,Kinect V2 
 sudo modprobe -r v4l2loopback
 ```
 
-## Install in systemd
+## Install to load on reboot with systemd
 
 If you use the **OpenGLPacketPipeline** from libfreenect2, you will **need more configuration,** because it **needs X11 display server to work.**
 
 ```
-sudo ln -s $HOME/Documents/GitHub/freenect2cam/systemd/freenect2cam.service /etc/systemd/system
-sudo ln -s $HOME/Documents/GitHub/freenect2cam/build/freenect2cam /usr/bin/
+sudo cp ./modprobe/load-v4l2loopback.conf /etc/modules-load.d/
+sudo cp ./modprobe/v4l2loopback.conf /etc/modprobe.d/
+sudo cp ./systemd/freenect2cam.service /etc/systemd/system/
+sudo cp ./build/freenect2cam /usr/bin/
 
 sudo systemctl daemon-reload
 sudo systemctl enable freenect2cam.service
@@ -43,6 +45,5 @@ sudo systemctl start freenect2cam.service
 v4l2-ctl --device=/dev/video0 --all
 v4l2-ctl --list-devices
 
-ffmpeg -f x11grab -framerate 60 -video_size 1920x1080 -i :1.0 -pix_fmt yuv420p -f v4l2 /dev/video0
 ffplay /dev/video0
 ```
