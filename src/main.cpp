@@ -64,7 +64,7 @@ class CustomFrameListener: public FrameListener {
 };
 
 char* itoa(int value){
-    char *buf = new char;
+    char *buf = (char *)calloc(12, 1);
 
     sprintf(buf,"%d",value);
 	
@@ -130,6 +130,8 @@ bool is_video_device_used() {
     return false;
 }
 
+//@import freenect2, opencv4
+//@main
 int main(int argc, char *argv[]) {
     signal(SIGINT, handler);
     signal(SIGTERM, handler);

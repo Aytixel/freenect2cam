@@ -1,11 +1,3 @@
-#include <linux/videodev2.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-
-#include <fcntl.h>
-#include <iostream>
-#include <cstring>
-
 #include <video_device.hpp>
 
 using namespace std;

@@ -4,14 +4,24 @@ Linux Kinect V2 driver, using **Freenect2, V4l2loopback** and **OpenCV.**
 
 ## Build
 
-You have to have **download, build** and **install, libfreenect2, opencv, libv4l-dev** and **v4l2loopback** before!
-We also recommend **installing v4l-utils.**
+You have to have **download, build** and **install, libfreenect2, opencv,
+libv4l-dev** and **v4l2loopback** before! We also recommend **installing
+v4l-utils.**
 
-**⚠️ Do not forget to set up udev rules, for device access on linux, after installing libfreenect2.**
+**⚠️ Do not forget to set up udev rules, for device access on linux, after
+installing libfreenect2.**
+
+### Using CMake
 
 ```
 mkdir build && cd build
 cmake -Dfreenect2_DIR=$HOME/freenect2/lib/cmake/freenect2 .. && make
+```
+
+### Using Maky
+
+```
+maky build --release
 ```
 
 ## Run it
@@ -26,7 +36,8 @@ sudo modprobe -r v4l2loopback
 
 ## Install to load on reboot with systemd
 
-If you use the **OpenGLPacketPipeline** from libfreenect2, you will **need more configuration,** because it **needs X11 display server to work.**
+If you use the **OpenGLPacketPipeline** from libfreenect2, you will **need more
+configuration,** because it **needs X11 display server to work.**
 
 ```
 sudo cp ./modprobe/load-v4l2loopback.conf /etc/modules-load.d/

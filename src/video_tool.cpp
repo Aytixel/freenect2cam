@@ -1,5 +1,3 @@
-#include <opencv2/opencv.hpp>
-
 #include <video_tool.hpp>
 
 using namespace cv;

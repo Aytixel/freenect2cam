@@ -1,0 +1,8 @@
+cc = "g++"
+inc = "include"
+
+[libs.opencv4]
+pkg = { opencv4 = "*" }
+
+[libs.freenect2]
+pkg = { freenect2 = "*" }
