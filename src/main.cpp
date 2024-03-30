@@ -131,7 +131,7 @@ bool is_video_device_used() {
 }
 
 //@import freenect2, opencv4
-//@main
+//@main freenect2cam
 int main(int argc, char *argv[]) {
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
